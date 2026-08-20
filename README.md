@@ -1,276 +1,281 @@
 # Northstar Homes AI Sales Assistant
 
-Northstar Homes AI Sales Assistant is a FastAPI-based conversational sales agent designed to qualify property buyers, answer supported project questions, handle objections, and simulate site-visit booking.
-
 ## 1. Project Overview
 
-The application is an intelligent chat interface built for prospective real estate buyers exploring the Northstar One project. It solves the problem of providing 24/7, high-quality initial sales engagements without requiring immediate human intervention. 
+This repository contains the Northstar Homes AI sales assistant created for the Huvo AI Forward Deployed Engineer assignment. 
 
-Customers can ask questions, provide their property requirements, and book site visits directly through the chat. The agent acts as a Northstar Homes representative, naturally guiding the conversation to qualify the lead and collect necessary information. After the conversation ends, the system automatically processes the transcript to extract structured analytics and lead qualification scores for the sales team.
+The application provides a conversational chat UI where customers can interact with the AI assistant. The system is designed to understand customer requirements and gently guide them toward a simulated site visit. It specifically handles:
+- Customer requirements discovery
+- Configuration qualification (e.g., 2 BHK or 3 BHK)
+- Budget qualification
+- Purchase timeline
+- Purpose of purchase (self-use or investment)
+- Handling customer objections (e.g., price concerns)
+- Handling follow-up requests
+- Handling stop-communication requests
+- Escalating unknown questions to a human agent
+- Site-visit booking simulation
+- Booking failure scenarios
+- Booking cancellation
+- Real-time conversation analytics extraction
 
-## 2. Assignment Requirements
+## 2. Assignment Requirements Covered
 
 | Requirement | Implementation |
-| --- | --- |
-| Natural conversation | Driven by Groq LLM with a strict persona prompt |
-| Customer qualification | Extracts configuration, budget, purpose, and timeline |
-| English, Hindi, Hinglish | Handled natively by the prompt and intent extraction regex |
-| Conversation memory | Stateful dictionary (`CustomerContext`) stored per session |
-| Intent handling | Deterministic regex-based engine for critical operations |
-| Site visit booking | Simulated booking function with date/time parsing |
-| Booking failure | Simulated weekday failure logic with fallback prompting |
-| Human escalation | Detects requests to speak with a real person |
-| Analytics extraction | Dedicated low-temperature LLM pipeline for JSON extraction |
-| Proper conversation ending | Handles opt-outs and explicit follow-up requests |
+|---|---|
+| Natural conversation | Driven by the `openai/gpt-oss-20b` model via Groq, providing contextual and conversational responses. |
+| Customer qualification | System prompts gently guide the LLM to extract budget, configuration, timeline, and purpose without aggressive interrogation. |
+| English | Natively supported by the LLM and intent extraction engine. |
+| Hindi | Supported via LLM capability and transliterated Hindi regex patterns in the intent engine. |
+| Hinglish | Handled seamlessly by the LLM and specific keyword matching in the backend. |
+| Conversation memory | A robust in-memory `CustomerContext` dictionary ensures the latest customer details overwrite older ones. The LLM always sees the current state. |
+| Intent handling | Deterministic regex patterns intercept critical intents (e.g., Stop, Escalate, Booking) before they reach the LLM. |
+| Common objections | The LLM prompt includes guidelines for handling price, location, and family-decision objections naturally without inventing discounts. |
+| Busy customers | Intent engine extracts "busy" keywords and gracefully flags the conversation for follow-up. |
+| Uninterested customers | Extracted via intent rules. The bot gracefully acknowledges and can stop communication. |
+| Requests to contact later | Sets `follow_up_required = True` in the backend state and confirms with the customer. |
+| Requests to stop communication | Sets `communication_active = False` in the backend, blocking further LLM processing and respecting user privacy. |
+| Unknown questions | The LLM is strictly prompted to admit lack of knowledge for unprovided facts (like rental yields) and trigger human escalation. |
+| Site-visit booking | Simulated via an internal backend state machine. The LLM is only provided the resulting booking ID to relay. |
+| Booking failure | Simulated gracefully. An unresolvable date triggers a failure in the backend, and the LLM suggests alternative slots. |
+| Booking cancellation | If a customer refuses a visit after confirmation, the backend cancels the active booking and updates the state. |
+| Human escalation | Flagged in the backend via regex intents or LLM fallback behavior, updating the analytics payload accordingly. |
+| Proper conversation ending | Handled natively by the LLM when intent extraction flags a stop or final confirmation. |
+| Analytics extraction | The backend merges deterministic flags (like follow-ups) with LLM-extracted entities into a structured JSON analytics object. |
 
 ## 3. Key Features
 
-### Conversational Sales Agent
-The assistant behaves strictly as a Northstar Homes representative. It avoids generic chatbot responses, refuses to invent property details, and focuses on understanding the customer's needs before attempting to close a booking.
+- **LLM for natural conversation:** The application uses a Large Language Model to ensure conversations feel natural, empathetic, and human-like.
+- **Deterministic backend logic for critical business state:** The LLM is strictly limited to conversation. The backend controls the actual state machine for bookings, cancellations, and opt-outs.
+- **Conversation memory:** Customer context is continuously updated and injected into the system prompt at every turn, ensuring the LLM is always aware of the latest facts.
+- **Intent and entity extraction:** Lightweight regex patterns identify critical paths (like stop-communication or visit interest) to ensure 100% reliable business logic routing.
+- **Multilingual handling:** Code and prompts are designed to gracefully accept and respond to English, Hindi, and Hinglish inputs.
+- **Site-visit state machine:** A controlled flow (Not Requested -> Awaiting Date/Time -> Confirmed/Failed) prevents the LLM from inventing fake appointments.
+- **Analytics extraction:** Merges reliable backend intent flags with LLM entity extraction to generate a final, accurate JSON analytics profile.
+- **Anti-hallucination rules:** The prompt strictly forbids the LLM from inventing prices, amenities, availability, or discounts. **The LLM is NOT trusted with authoritative booking state.**
 
-### Customer Qualification
-As the customer speaks, the backend deterministically extracts and remembers:
-* configuration (e.g., 2 BHK, 3 BHK)
-* budget (e.g., 2 crore)
-* purpose (self-use vs investment)
-* timeline (e.g., immediate, within 3 months)
-
-### Objection Handling
-The prompt instructs the LLM to identify and gracefully handle common objections, specifically price concerns, family discussion hesitation, and general indecision.
-
-### Multilingual Conversation
-The agent can process and respond in English, Hindi, and Hinglish. The intent engine uses multilingual regular expressions (e.g., "baad mein", "nahi chahiye") to ensure state transitions work accurately regardless of the language used.
-
-### Conversation Memory
-All extracted entities and state transitions are stored in a session-specific context dictionary on the backend. This context is injected into the system prompt on every turn, allowing the LLM to remember past statements without needing to parse the entire history repeatedly.
-
-### Site Visit Booking
-When the customer expresses interest and provides a date and time, the backend intercepts the state and attempts to generate a booking ID. If successful, the booking ID is injected into the LLM's context to relay to the customer.
-
-### Booking Failure
-If the customer requests an invalid slot (simulated as weekday visits), the backend returns a failure reason. The LLM is then instructed to politely explain the restriction and ask for an alternative weekend slot.
-
-### Booking Cancellation
-If a customer explicitly refuses or cancels a visit after a booking ID has been generated, the backend intercepts the intent, cancels the slot, and retains the cancelled booking ID in the analytics history.
-
-### Follow-up
-If the customer explicitly requests a callback (e.g., "Call me tomorrow"), the system flags `follow_up_required` as true for the sales team.
-
-### Stop Communication
-If the customer explicitly opts out, the backend halts further LLM generation and returns a standardized polite farewell.
-
-### Analytics
-An offline pipeline processes the chat transcript to generate structured JSON containing the final lead status, objections, and conversation outcome.
-
-## 4. Customer Conversation Flow
-
-The conversation is adaptive and does not force the customer through a rigid form. A typical successful interaction flows as follows:
-
-Customer
-  |
-  v
-Initial requirement
-  |
-  v
-Configuration & Budget
-  |
-  v
-Timeline / purpose / preferences
-  |
-  v
-Questions and objections
-  |
-  +---- Site visit
-  |        |
-  |        +---- Available -> Booking
-  |        |
-  |        +---- Unavailable -> Failure handling
-  |        |
-  |        +---- Cancelled -> Cancellation handling
-  |
-  +---- Follow-up
-  |
-  +---- Stop communication
-  |
-  v
-Conversation analytics
-
-## 5. Architecture Overview
-
-The system uses a decoupled architecture where the backend maintains absolute control over the state machine, and the LLM acts purely as a stateless conversational engine.
-
-Customer
-   |
-   v
-Frontend Chat UI
-   |
-   v
-FastAPI Backend
-   |
-   +--> Conversation State
-   |
-   +--> Intent Engine
-   |
-   +--> Site Visit Logic
-   |
-   +--> Prompt Construction
-   |
-   +--> Groq LLM
-   |
-   +--> Analytics Extraction
-   |
-   v
-Frontend Response + Analytics
-
-For detailed architectural decisions, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## 6. Technology Stack
-
-* **Python**: Core programming language.
-* **FastAPI**: Provides robust, asynchronous REST APIs and dependency injection.
-* **Groq**: Provides low-latency inference for the conversational agent.
-* **openai/gpt-oss-20b**: The specific model used for both chat and analytics extraction.
-* **React / Vite / TypeScript**: Powers the frontend user interface and analytics dashboard.
-
-## 7. Project Structure
-
-```text
-project/
-├── backend/
-│   ├── .env.example
-│   ├── analytics.py        (Transcript to JSON extraction)
-│   ├── booking.py          (Simulated booking integration)
-│   ├── conversation.py     (In-memory session state)
-│   ├── intent.py           (Regex intent and entity engine)
-│   ├── llm.py              (Groq API integration)
-│   ├── main.py             (FastAPI routes and orchestration)
-│   ├── models.py           (Pydantic schemas)
-│   ├── prompt.py           (System prompts)
-│   └── requirements.txt
-├── docs/
-│   └── ARCHITECTURE.md
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── App.tsx
-│   │   ├── api.ts
-│   │   └── main.tsx
-│   ├── index.html
-│   └── package.json
-├── .gitignore
-└── README.md
-```
-
-## 8. Setup and Running
+## 4. How to Run the Bot
 
 ### Prerequisites
-* Python 3.10+
-* Node.js 18+
-* A valid Groq API Key with access to `openai/gpt-oss-20b`
 
-### Installation
+- Python 3.12 (or compatible 3.x version)
+- Node.js
+- Groq API key
 
-**Backend**
+### Backend
+
+Open a terminal and set up the backend:
+
 ```bash
 cd backend
 python -m venv .venv
-# Activate virtual environment (Windows: .venv\Scripts\activate, Mac/Linux: source .venv/bin/activate)
+```
+
+Activate the virtual environment:
+- On Windows: `.venv\Scripts\activate`
+- On macOS/Linux: `source .venv/bin/activate`
+
+Install dependencies:
+```bash
 pip install -r requirements.txt
 ```
 
-**Frontend**
-```bash
-cd frontend
-npm install
-```
-
-### Environment Variables
-Create a `.env` file in the `backend/` directory:
-
+Create a `.env` file in the `backend/` directory by copying `.env.example`:
 ```env
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=openai/gpt-oss-20b
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
-Create a `.env` file in the `frontend/` directory:
-
-```env
-VITE_API_URL=http://localhost:8000
-```
-
-### Start Backend
+Start the FastAPI server:
 ```bash
-cd backend
 uvicorn main:app --reload --port 8000
 ```
 
-### Start Frontend
+### Frontend
+
+Open a second terminal and set up the frontend:
+
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-### Open Application
-Navigate to `http://localhost:5173` in your browser.
+The frontend will be available locally at `http://localhost:5173`. Open this URL in your browser to interact with the bot.
 
-## 9. Prompt Engineering
+## 5. Project Structure
 
-### Northstar Homes Persona
-The system prompt strictly defines the assistant as a representative of Northstar Homes. It is instructed to be polite, professional, and entirely focused on real estate sales without breaking character.
+```text
+backend/
+  main.py
+  prompt.py
+  intent.py
+  conversation.py
+  booking.py
+  analytics.py
+  llm.py
+  models.py
+  requirements.txt
+  .env.example
+frontend/
+  package.json
+  vite.config.ts
+  src/
+    App.tsx
+    api.ts
+    components/
+tests/
+  test_api.py
+  test_booking.py
+  test_conversation.py
+  test_intent.py
+docs/
+  ARCHITECTURE.md
+README.md
+```
 
-### Conversation Behavior
-The agent is constrained to write 1 to 3 concise sentences per response. It is explicitly instructed to avoid interrogation-style behavior. Instead of asking a list of questions, it organically integrates qualification questions into natural conversational flow.
+## 6. Architecture Overview
 
-### Grounded Information
-The prompt contains strict anti-hallucination guardrails. The agent is forbidden from inventing prices, amenities, availability, discounts, or possession dates. If a customer asks a question outside the provided project context, the agent gracefully deflects and offers to connect them with a human representative.
+```text
+Customer
+   |
+   v
+Frontend
+   |
+   v
+FastAPI (backend/main.py)
+   |
+   +--> Conversation memory (conversation.py)
+   +--> Intent/entity extraction (intent.py)
+   +--> Prompt construction (prompt.py)
+   +--> Groq LLM (llm.py)
+   +--> Booking state machine (booking.py)
+   +--> Analytics (analytics.py)
+   |
+   v
+Response
+```
 
-### Objections
-The agent is trained to recognize price objections (e.g., "That is out of my budget") and hesitation (e.g., "I need to discuss with my family"). It acknowledges these concerns politely rather than aggressively pushing for a sale.
+The most important architectural principle of this system is separation of concerns. The LLM handles natural language generation and conversational empathy, while deterministic backend logic remains the absolute source of truth for critical state such as:
+- booking
+- cancellation
+- communication stop
+- structured customer state where applicable
 
-### Conversation Ending
-The agent supports natural goodbyes, acknowledging follow-up requests ("I will have someone call you next week"), and confirming successful or cancelled site visits.
+For a deeper dive into the system design, please see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## 7. Key Assumptions
+
+- Northstar One information available to the agent is intentionally limited.
+- The known project information includes:
+  - Project: Northstar One
+  - Location: Sector 79, Gurugram
+  - 2 BHK and 3 BHK options
+  - 2 BHK starting price: Rs 1.35 crore
+  - 3 BHK starting price: Rs 1.75 crore
+- The agent must not invent unavailable project information.
+- Site visits are simulated entirely in memory.
+- There is no real calendar integration.
+- There is no real CRM integration.
+- Conversation state is stored in memory for the assignment demo (it will reset if the server restarts).
+- Booking IDs are simulated and sequential.
+
+## 8. Known Limitations
+
+These are intentional assignment-scope limitations, not implementation failures:
+- Limited project knowledge (the bot only knows what is explicitly defined in its prompt).
+- No live inventory or pricing database.
+- No real calendar API integration for bookings.
+- No real CRM integration for lead capture.
+- In-memory conversation state (sessions do not persist across server reboots).
+- Booking simulation only (no actual emails or calendar invites are sent).
+- Booking IDs are not persistent in a database.
+- Human escalation is represented by application logic and analytics flags rather than a real-time agent handoff.
+
+## 9. AI Tools Used
+
+- **Groq API**: Used as the inference engine for extreme low-latency responses.
+- **Model**: `openai/gpt-oss-20b` (Configured via the `.env` file).
+- **LLM Usage**: Used for LLM-based conversational generation and LLM-based analytics extraction.
+- **Prompt Engineering**: Core behavior is shaped by detailed persona rules located in `backend/prompt.py`.
+- **Backend Rules**: Deterministic regex intent/entity extraction is implemented in `backend/intent.py` to augment LLM capabilities.
+
+*Note: Antigravity IDE and Claude 3.5 Sonnet were used strictly as development tooling to assist in writing and structuring the application code. They are not part of the runtime application.*
 
 ## 10. Testing
 
-| # | Scenario | Input / Action | Expected Behavior | Result |
-| - | -------- | -------------- | ----------------- | ------ |
-| 1 | Basic qualification | "I want a 3 BHK" | Extracts configuration = 3 BHK | PASS |
-| 2 | Budget extraction | "My budget is 2 crore" | Extracts budget = 2 crore | PASS |
-| 3 | Requirements change | "Actually make it a 2 BHK" | Updates configuration = 2 BHK | PASS |
-| 4 | Price objection | "That is too expensive" | Logs price objection, handles politely | PASS |
-| 5 | Unknown info | "Do you have a swimming pool?" | Deflects to a human representative | PASS |
-| 6 | Hinglish conversation | "Site visit baad mein karunga" | Extracts timeline/intent without crashing | PASS |
-| 7 | Successful site visit | "Saturday at 11 AM" | Triggers booking, returns NS- booking ID | PASS |
-| 8 | Invalid weekday booking | "Monday at 11 AM" | Booking fails, prompts for weekend slot | PASS |
-| 9 | Booking cancellation | "Actually don't book it" | Cancels existing ID, sets status to cancelled | PASS |
-| 10 | Explicit callback | "Call me tomorrow" | Sets follow_up_required = true | PASS |
-| 11 | Stop communication | "Stop messaging me" | Halts LLM generation, sets stopped status | PASS |
+Automated tests are written using `pytest`. The current automated test result is:
 
-## 11. Example Conversation
+**11 passed**
+**0 failed**
 
-**Customer:** Hi, I am looking for a 3 BHK.  
-**Assistant:** Welcome to Northstar Homes! We do have 3 BHK apartments available at Northstar One starting from ₹1.75 crore. Do you have a specific budget in mind?  
-**Customer:** My budget is exactly 1.75 crore. Can I see it?  
-**Assistant:** That fits perfectly. I would be happy to arrange a site visit for you. What day and time works best for you this weekend?  
-**Customer:** Saturday at 11 AM.  
-**Assistant:** Fantastic. Your site visit is confirmed for Saturday at 11 AM (Booking ID: NS-1). We look forward to showing you the property!  
-**Customer:** Actually, cancel that. I need to check my schedule.  
-**Assistant:** Not a problem, I have cancelled your booking. Take your time, and just let me know when you are ready to reschedule.
+The automated suite covers core behavior such as:
+- qualification
+- budget/configuration extraction
+- Hinglish parsing
+- conversation memory updates
+- follow-up requests
+- stop communication triggers
+- successful booking
+- booking failure
+- cancellation
+- API behavior
+- unknown information handling
+- price objection handling
 
-## 12. Limitations
+Major manual scenarios tested through the UI include:
+- normal qualification flow
+- 2 BHK to 3 BHK change mid-conversation
+- budget changes
+- price objection
+- family decision delays
+- investment intent
+- unknown project questions
+- English, Hindi, and Hinglish dialogue
+- successful site visit
+- failed site visit
+- cancellation
+- callback request
+- stop communication
 
-* **Simulated Availability:** The booking engine uses simulated logic (e.g., rejecting weekdays) rather than checking a real database.
-* **In-Memory State:** Conversation history is stored in memory (`conversation.py`). Restarting the server clears active sessions.
-* **Regex Extraction:** Initial intent extraction relies on regular expressions. While fast and deterministic, highly unusual phrasing might bypass the regex and rely purely on the LLM.
+## 11. Prompt Engineering Approach
 
-## 13. Future Improvements
+### Persona
+The assistant behaves strictly as a Northstar Homes representative rather than presenting itself as a generic AI assistant. It maintains a professional, sales-oriented, but helpful tone.
 
-* **Persistent Database:** Migrate `CustomerContext` and conversation history to PostgreSQL or Redis.
-* **Real CRM Integration:** Push final analytics JSON directly into Salesforce or HubSpot.
-* **Real Inventory Validation:** Connect `booking.py` to a real calendar or availability API.
-* **Live Human Handoff:** Route the chat session to a live agent dashboard when `human_escalation` is triggered.
+### Natural conversation
+The prompt encourages short, contextual responses and avoids repetitive interrogation. It reads like a WhatsApp chat rather than a robotic form.
 
-## 14. Assignment Summary
+### Qualification
+The assistant gathers information such as configuration, budget, purpose, and timeline gently over the course of the conversation without repeatedly asking for information already provided.
 
-The Northstar Homes AI Sales Assistant demonstrates a production-style approach to conversational AI. By strictly decoupling deterministic state management (FastAPI) from natural language generation (Groq LLM), the system achieves reliable lead qualification, robust booking simulation, and structured analytics extraction while maintaining a natural, multilingual customer experience.
+### Language
+The prompt explicitly supports and responds natively to English, Hindi, and Hinglish.
+
+### Objections
+Handles price concerns, family discussion, hesitation, being busy, lack of interest, requests to contact later, and requests to stop communication through empathetic, pre-defined behavioral guardrails.
+
+### Grounding
+The prompt strictly prevents the model from inventing prices, discounts, availability, amenities, possession dates, rental yield, investment returns, or unsupported project facts.
+
+### Booking safety
+The model does not independently create authoritative booking IDs. Booking state is controlled entirely by backend logic, and the LLM simply relays the exact success or failure context injected into its prompt.
+
+### Analytics
+Analytics are generated from the conversation context, while critical backend state (like follow-up status or escalation) remains authoritative and overrides the LLM if conflicts occur.
+
+## 12. Example Conversation
+
+**Customer**: Hi, I'm looking for a flat in Gurgaon.
+**Assistant**: Hello! Welcome to Northstar Homes. We have a premium residential project, Northstar One, located in Sector 79, Gurugram. Are you looking for a 2 BHK or a 3 BHK?
+**Customer**: 3 BHK. What is the price?
+**Assistant**: Our 3 BHK apartments start at Rs 1.75 crore. Does this fit within your budget?
+**Customer**: Yes, that works. I want to move in soon.
+**Assistant**: That sounds great. To help you experience the property, would you like to schedule a site visit? 
+**Customer**: Yes, book it for Saturday at 11 AM.
+**Assistant**: Excellent! Your site visit for Saturday at 11 AM is confirmed. Your booking ID is NS-1001. We look forward to seeing you at Northstar One!
+
+## 13. Submission Notes
+
+The current booking implementation supports site visits on any resolvable day of the week, including weekdays. Booking failure is demonstrated deterministically in the test suite using an unresolvable date format (`2099-01-01`).

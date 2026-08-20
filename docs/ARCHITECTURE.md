@@ -113,7 +113,7 @@ ready_to_book
      |
      +---- Valid Date/Time ----> confirmed (Booking ID Generated)
      |
-     +---- Invalid Date -------> failed (Prompt asks for weekend slot)
+     +---- Invalid/Blocked Date -> failed (Prompt asks for another slot)
 ```
 
 Cancellation flow:
@@ -129,8 +129,8 @@ If the customer provides a date/time and confirms the booking, the backend gener
 ## 9. Failure Handling
 
 The architecture is designed to handle failure paths gracefully:
-* **Unavailable weekday**: The mock booking engine explicitly rejects weekdays. The backend injects a "BOOKING FAILED" tool context instructing the LLM to apologize and ask for a weekend.
-* **Invalid slot**: Similar to weekdays, invalid formats reject at the backend and prompt the LLM to ask for a specific date.
+* **Unavailable slot**: Booking validation checks the requested date and time and can return a failure for an unresolvable or explicitly blocked test slot. The backend passes the failure reason to the LLM, which communicates the failure and asks the customer for another slot.
+* **Invalid format**: Dates that cannot be resolved (like generic or unknown formats) reject at the backend and prompt the LLM to ask for a specific date.
 * **Unsupported information**: The prompt explicitly forces the LLM to escalate to a human representative when asked about unprovided property details.
 * **Stop communication**: If the intent engine detects a stop command, the backend short-circuits the entire request. The LLM is bypassed, and a hardcoded polite response is returned.
 

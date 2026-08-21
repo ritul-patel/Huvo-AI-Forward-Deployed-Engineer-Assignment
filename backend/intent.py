@@ -85,6 +85,9 @@ _VISIT_REFUSAL_PATTERNS = [
     r"not\s+now",
     r"not\s+yet",
     r"abhi\s+nahi",
+    r"\bcancel\b",
+    r"cancel\s+(the|my)?\s*(visit|booking|appointment|it)?\b",
+    r"cancel\s+kar\s+(do|de)",
 ]
 
 _VISIT_PATTERNS = [
